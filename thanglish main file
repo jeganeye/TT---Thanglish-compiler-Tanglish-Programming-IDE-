@@ -1,0 +1,972 @@
+import re
+import sys
+import traceback
+import readline  # For better command history in interactive mode
+import os
+
+global_namespace = {}
+
+# Define Tanglish keywords and their Python equivalents
+KEYWORDS = {
+    # Control flow and basic keywords
+    "eluthu": "print",
+    "enna": "if",
+    "illana": "else",
+    "varu": "def",
+    "mudivu": "return",
+    "neram": "while",
+    "payan": "for",
+    "thodar": "continue",
+    "niruthu": "break",
+    "serthu": "import",
+    "mugavari": "from",
+    "vera": "as",
+    "sirandha": "class",
+    "self": "self",
+    "veruppu": "pass",
+    "sollu": "raise",
+    "sindhanaiselutham": "try",
+    "thavaruselutham": "except",
+    "mudikirathu": "finally",
+    "maippu": "with",
+    "illainu": "elif",
+    "sila": "lambda",
+    "unmai": "True",
+    "poi": "False",
+    "ondruumillai": "None",
+    "ezhuthapadum": "global",
+    "akkam": "nonlocal",
+    "idam": "del",
+    "thodarbu": "assert",
+    "vilakku": "not",
+    "athuvaaga": "and",
+    "allathu": "or",
+    "maari": "is",
+    "udaya": "in",
+    "vaangu": "input",
+    
+    # Data types
+    "saram": "str",       # String (சரம்)
+    "enn": "int",         # Integer (எண்)
+    "midhaenn": "float",  # Float (மிதஎண்)
+    "ulmai": "bool",      # Boolean (உள்மை)
+    "pattial": "list",    # List (பட்டியல்)
+    "agarathi": "dict",   # Dictionary (அகராதி)
+    "thoguthy": "set",    # Set (தொகுதி)
+    "urumaru": "tuple",   # Tuple (உருமாறா)
+    "onrum_illai": "None", # None (ஒன்றும் இல்லை)
+    
+    # Type conversion functions
+    "saram_akku": "str",      # Convert to string
+    "enn_akku": "int",        # Convert to integer
+    "midhaenn_akku": "float", # Convert to float
+    "ulmai_akku": "bool",     # Convert to boolean
+    "pattial_akku": "list",   # Convert to list
+    "agarathi_akku": "dict",  # Convert to dictionary
+    "thoguthy_akku": "set",   # Convert to set
+    "urumaru_akku": "tuple",  # Convert to tuple
+    
+    # Common methods and functions
+    "idaipadu": "join",       # String join
+    "piri": "split",          # String split
+    "maatru": "replace",      # String replace
+    "serkkavum": "append",    # List append
+    "neekku": "remove",       # List remove
+    "seruhu": "insert",       # List insert
+    "saavigal": "keys",       # Dictionary keys
+    "mathippugal": "values",  # Dictionary values
+    "inaikal": "items",       # Dictionary items
+    "neelamm": "len",         # Length function
+    "varisaipadu": "sorted",  # Sorted function
+    "vaagai": "type",         # Type function
+    "madippu": "value"        # Value (generic term)
+}
+
+# Tamil Standard Library (தமிழ் நிலையான நூலகம்)
+TAMIL_STD_LIB = {
+    # Module names
+    "kanitham": "math",           # Math module (கணிதம்)
+    "seyalmurai": "os",           # OS module (செயல்முறை)
+    "neram": "time",              # Time module (நேரம்)
+    "saralvadivam": "re",         # Regular expressions (சரல் வடிவம்)
+    "elamai": "random",           # Random module (ஏலமை)
+    "kopu": "io",                 # IO module (கோப்பு)
+    "json_tharavagam": "json",    # JSON module (JSON தரவகம்)
+    "valai": "urllib",            # URL lib (வலை)
+    "pathivu": "logging",         # Logging (பதிவு)
+    "kural": "sys",               # System (கூறல்)
+    "thoguppu": "collections",    # Collections (தொகுப்பு)
+    "kuyidu": "pickle",           # Pickle (குயிடு)
+    "kurukku": "threading",       # Threading (குறுக்கு)
+    "niralakki": "datetime",      # DateTime (நிரலாக்கி)
+    "pathudai": "pathlib",        # Pathlib (பாதுடை)
+    "kurippu": "csv",             # CSV (குறிப்பு)
+    "zippu": "zipfile",           # Zipfile (ஜிப்பு)
+    "thadai": "socket",           # Socket (தடை)
+    "katturai": "argparse",       # Argparse (கட்டுரை)
+    "sorsodigai": "itertools",    # Itertools (சொற்சோடிகை)
+    
+    # Math functions
+    "kanitham_sin": "math.sin",
+    "kanitham_cos": "math.cos",
+    "kanitham_tan": "math.tan",
+    "kanitham_sqrt": "math.sqrt",
+    "kanitham_log": "math.log",
+    "kanitham_exp": "math.exp",
+    "kanitham_pi": "math.pi",
+    "kanitham_e": "math.e",
+    "kanitham_floor": "math.floor",
+    "kanitham_ceil": "math.ceil",
+    "kanitham_abs": "abs",
+    "kanitham_pow": "pow",
+    "kanitham_round": "round",
+    
+    # Time functions
+    "neram_thoongu": "time.sleep",
+    "neram_ipothu": "time.time",
+    "neram_ctime": "time.ctime",
+    "neram_strftime": "time.strftime",
+    
+    # OS functions
+    "seyalmurai_pathai": "os.path",
+    "seyalmurai_adaivu": "os.listdir",
+    "seyalmurai_remove": "os.remove",
+    "seyalmurai_mkdir": "os.mkdir",
+    "seyalmurai_rmdir": "os.rmdir",
+    "seyalmurai_rename": "os.rename",
+    "seyalmurai_getenv": "os.getenv",
+    "seyalmurai_system": "os.system",
+    "seyalmurai_chdir": "os.chdir",
+    "seyalmurai_getcwd": "os.getcwd",
+    
+    # Random functions
+    "elamai_enn": "random.randint",
+    "elamai_thervu": "random.choice",
+    "elamai_kalavai": "random.shuffle",
+    "elamai_midha": "random.random",
+    "elamai_uniform": "random.uniform",
+    
+    # File operations
+    "kopu_thirappu": "open",
+    "kopu_padippu": "read",
+    "kopu_ezhuthu": "write",
+    "kopu_moodu": "close",
+    
+    # String operations
+    "saram_replace": "replace",
+    "saram_find": "find",
+    "saram_split": "split",
+    "saram_join": "join",
+    "saram_strip": "strip",
+    "saram_upper": "upper",
+    "saram_lower": "lower",
+    "saram_startswith": "startswith",
+    "saram_endswith": "endswith",
+    
+    # Regular expressions
+    "saralvadivam_poruthu": "re.match",
+    "saralvadivam_thedu": "re.search",
+    "saralvadivam_maatru": "re.sub",
+    "saralvadivam_piri": "re.split",
+    "saralvadivam_anaithu": "re.findall",
+    "saralvadivam_compile": "re.compile",
+    
+    # JSON operations
+    "json_parse": "json.loads",
+    "json_stringify": "json.dumps",
+    "json_kopu_padippu": "json.load",
+    "json_kopu_ezhuthu": "json.dump",
+    
+    # System functions
+    "kural_veliyeru": "sys.exit",
+    "kural_path": "sys.path",
+    "kural_argv": "sys.argv",
+    "kural_version": "sys.version",
+    "kural_platform": "sys.platform",
+    
+    # DateTime functions
+    "niralakki_ipothu": "datetime.datetime.now",
+    "niralakki_date": "datetime.date",
+    "niralakki_time": "datetime.time",
+    "niralakki_delta": "datetime.timedelta",
+    
+    # Collections
+    "thoguppu_counter": "collections.Counter",
+    "thoguppu_defaultdict": "collections.defaultdict",
+    "thoguppu_deque": "collections.deque",
+    "thoguppu_namedtuple": "collections.namedtuple",
+    
+    # URL operations
+    "valai_request": "urllib.request.urlopen",
+    "valai_parse": "urllib.parse.urlparse",
+    "valai_quote": "urllib.parse.quote",
+    "valai_unquote": "urllib.parse.unquote",
+    
+    # Logging
+    "pathivu_amaipu": "logging.basicConfig",
+    "pathivu_debug": "logging.debug",
+    "pathivu_info": "logging.info",
+    "pathivu_warning": "logging.warning",
+    "pathivu_error": "logging.error",
+    "pathivu_critical": "logging.critical",
+    
+    # Path operations
+    "pathudai_path": "pathlib.Path",
+    "pathudai_home": "pathlib.Path.home",
+    "pathudai_exists": "pathlib.Path.exists",
+    "pathudai_mkdir": "pathlib.Path.mkdir",
+    
+    # CSV operations
+    "kurippu_reader": "csv.reader",
+    "kurippu_writer": "csv.writer",
+    "kurippu_dictreader": "csv.DictReader",
+    "kurippu_dictwriter": "csv.DictWriter",
+    
+    # Zip operations
+    "zippu_thirappu": "zipfile.ZipFile",
+    "zippu_extract": "extractall",
+    "zippu_serukku": "write",
+    
+    # Socket operations
+    "thadai_socket": "socket.socket",
+    "thadai_connect": "connect",
+    "thadai_bind": "bind",
+    "thadai_listen": "listen",
+    "thadai_accept": "accept",
+    
+    # Itertools
+    "sorsodigai_cycle": "itertools.cycle",
+    "sorsodigai_count": "itertools.count",
+    "sorsodigai_chain": "itertools.chain",
+    "sorsodigai_combinations": "itertools.combinations",
+    "sorsodigai_permutations": "itertools.permutations"
+}
+
+# 1. Add support for Tamil data visualization with matplotlib
+TAMIL_VISUALIZATION = {
+    "varaipada": "matplotlib.pyplot",       # Plotting library (வரைபடம்)
+    "varaipada_paddam": "plt.figure",       # Figure (படம்)
+    "varaipada_thalaippu": "plt.title",     # Title (தலைப்பு)
+    "varaipada_x_label": "plt.xlabel",      # X-axis label
+    "varaipada_y_label": "plt.ylabel",      # Y-axis label
+    "varaipada_kodu": "plt.plot",           # Line plot (கோடு)
+    "varaipada_patti": "plt.bar",           # Bar plot (பட்டி)
+    "varaipada_vattam": "plt.pie",          # Pie chart (வட்டம்)
+    "varaipada_sitharam": "plt.scatter",    # Scatter plot (சிதறல்)
+    "varaipada_kaattu": "plt.show",         # Show plot (காட்டு)
+    "varaipada_seemai": "plt.axis",         # Set axis (சீமை)
+    "varaipada_grid": "plt.grid",           # Grid (கட்டம்)
+    "varaipada_save": "plt.savefig",        # Save figure (சேமி)
+    "varaipada_close": "plt.close",         # Close figure (மூடு)
+    "varaipada_legend": "plt.legend",       # Legend (விளக்கம்)
+    "varaipada_vannangal": "plt.colors",    # Colors (வண்ணங்கள்)
+}
+
+# 2. Add support for Tamil data analysis with pandas and numpy
+TAMIL_DATA_ANALYSIS = {
+    "tharavu": "pandas",                    # Pandas (தரவு)
+    "tharavu_padippu": "pd.read_csv",       # Read CSV (படிப்பு)
+    "tharavu_ezhuthu": "to_csv",            # Write CSV (எழுது)
+    "tharavu_adavani": "DataFrame",         # DataFrame (அட்டவணை)
+    "tharavu_varisai": "Series",            # Series (வரிசை)
+    "tharavu_thervu": "loc",                # Selection (தேர்வு)
+    "tharavu_vadikatti": "filter",          # Filter (வடிகட்டி)
+    "tharavu_kurukku": "groupby",           # Group by (குறுக்கு)
+    "tharavu_serpu": "merge",               # Merge (சேர்ப்பு)
+    "tharavu_pivot": "pivot_table",         # Pivot table (சுழற்சி)
+    
+    "enn_aani": "numpy",                    # NumPy (எண் ஆணி)
+    "enn_aani_array": "np.array",           # Array (அணி)
+    "enn_aani_range": "np.arange",          # Range (வரம்பு)
+    "enn_aani_zeros": "np.zeros",           # Zeros (பூஜ்யங்கள்)
+    "enn_aani_ones": "np.ones",             # Ones (ஒன்றுகள்)
+    "enn_aani_random": "np.random",         # Random (சீரற்ற)
+    "enn_aani_mean": "np.mean",             # Mean (சராசரி)
+    "enn_aani_sum": "np.sum",               # Sum (கூட்டல்)
+    "enn_aani_min": "np.min",               # Min (குறைந்த)
+    "enn_aani_max": "np.max",               # Max (அதிக)
+    "enn_aani_std": "np.std",               # Standard deviation (நிலையான விலகல்)
+    "enn_aani_reshape": "reshape",          # Reshape (மறுவடிவம்)
+}
+
+# 3. Add support for Tamil web development with Flask
+TAMIL_WEB = {
+    "valai_seyal": "Flask",                 # Flask (வலை செயல்)
+    "valai_app": "app",                     # App (செயலி)
+    "valai_route": "route",                 # Route (பாதை)
+    "valai_request": "request",             # Request (கோரிக்கை)
+    "valai_redirect": "redirect",           # Redirect (திருப்பு)
+    "valai_render": "render_template",      # Render template (காட்சி)
+    "valai_session": "session",             # Session (அமர்வு)
+    "valai_url_for": "url_for",             # URL for (இணைப்பு)
+    "valai_flash": "flash",                 # Flash message (செய்தி)
+    "valai_run": "run",                     # Run (இயக்கு)
+}
+
+# 4. Add support for Tamil machine learning with scikit-learn
+TAMIL_ML = {
+    "arivu": "sklearn",                     # Scikit-learn (அறிவு)
+    "arivu_model": "model",                 # Model (மாதிரி)
+    "arivu_payirchi": "fit",                # Fit/Train (பயிற்சி)
+    "arivu_kanippu": "predict",             # Predict (கணிப்பு)
+    "arivu_madipidu": "score",              # Score (மதிப்பீடு)
+    "arivu_vaguppu": "classification",      # Classification (வகுப்பு)
+    "arivu_adaivu": "regression",           # Regression (அடைவு)
+    "arivu_kattam": "cluster",              # Clustering (கட்டம்)
+    "arivu_pirivu": "train_test_split",     # Train-test split (பிரிவு)
+    "arivu_alavidu": "metrics",             # Metrics (அளவிடு)
+    "arivu_confusion": "confusion_matrix",  # Confusion matrix (குழப்ப அட்டவணை)
+    "arivu_accuracy": "accuracy_score",     # Accuracy (துல்லியம்)
+    "arivu_precision": "precision_score",   # Precision (பிழையின்மை)
+    "arivu_recall": "recall_score",         # Recall (மீட்பு)
+}
+
+# 5. Add support for Tamil database operations with SQLite
+TAMIL_DB = {
+    "tharavu_thalum": "sqlite3",            # SQLite (தரவுத்தளம்)
+    "tharavu_inaippu": "connect",           # Connect (இணைப்பு)
+    "tharavu_cursor": "cursor",             # Cursor (சுட்டி)
+    "tharavu_execute": "execute",           # Execute (செயல்படுத்து)
+    "tharavu_fetch": "fetchall",            # Fetch all (பெறு)
+    "tharavu_fetch_one": "fetchone",        # Fetch one (ஒன்று பெறு)
+    "tharavu_commit": "commit",             # Commit (உறுதி)
+    "tharavu_close": "close",               # Close (மூடு)
+}
+
+# 6. Add support for Tamil GUI development with Tkinter
+TAMIL_GUI = {
+    "kaatchi": "tkinter",                   # Tkinter (காட்சி)
+    "kaatchi_jannalum": "Tk",               # Window (ஜன்னலும்)
+    "kaatchi_label": "Label",               # Label (விளக்கம்)
+    "kaatchi_button": "Button",             # Button (பொத்தான்)
+    "kaatchi_entry": "Entry",               # Entry (உள்ளீடு)
+    "kaatchi_frame": "Frame",               # Frame (சட்டம்)
+    "kaatchi_menu": "Menu",                 # Menu (பட்டி)
+    "kaatchi_checkbox": "Checkbutton",      # Checkbox (தேர்வுப்பெட்டி)
+    "kaatchi_radio": "Radiobutton",         # Radio button (தேர்வு பொத்தான்)
+    "kaatchi_listbox": "Listbox",           # Listbox (பட்டியல்பெட்டி)
+    "kaatchi_canvas": "Canvas",             # Canvas (திரைச்சீலை)
+    "kaatchi_mainloop": "mainloop",         # Main loop (முதன்மை சுழற்சி)
+    "kaatchi_pack": "pack",                 # Pack (அடுக்கு)
+    "kaatchi_grid": "grid",                 # Grid (கட்டம்)
+    "kaatchi_place": "place",               # Place (இடம்)
+}
+
+# Update the KEYWORDS dictionary with all new Tamil keywords
+KEYWORDS.update(TAMIL_STD_LIB)
+KEYWORDS.update(TAMIL_VISUALIZATION)
+KEYWORDS.update(TAMIL_DATA_ANALYSIS)
+KEYWORDS.update(TAMIL_WEB)
+KEYWORDS.update(TAMIL_ML)
+KEYWORDS.update(TAMIL_DB)
+KEYWORDS.update(TAMIL_GUI)
+
+# Reverse mapping for error translation
+PYTHON_TO_TANGLISH = {v: k for k, v in KEYWORDS.items()}
+
+# Tamil error messages
+ERROR_MESSAGES = {
+    "SyntaxError": "தொடரியல் பிழை",
+    "NameError": "பெயர் பிழை",
+    "TypeError": "வகை பிழை",
+    "ValueError": "மதிப்பு பிழை",
+    "IndexError": "குறியீட்டு பிழை",
+    "KeyError": "சாவி பிழை",
+    "AttributeError": "பண்புக்கூறு பிழை",
+    "ImportError": "இறக்குமதி பிழை",
+    "ZeroDivisionError": "பூஜ்ஜியத்தால் வகுத்தல் பிழை",
+    "FileNotFoundError": "கோப்பு காணப்படவில்லை பிழை",
+    "IndentationError": "உள்தள்ளல் பிழை",
+    "OverflowError": "மிகை நிரம்பல் பிழை",
+    "RuntimeError": "இயக்க நேர பிழை"
+}
+
+# Tamil code examples
+TAMIL_EXAMPLES = {
+    "hello_world": """# வணக்கம் உலகம்
+eluthu("வணக்கம் உலகம்!")
+""",
+
+    "calculator": """# எளிய கணிப்பான்
+varu koottu(a, b):
+    mudivu a + b
+
+varu kazhi(a, b):
+    mudivu a - b
+
+varu perukku(a, b):
+    mudivu a * b
+
+varu vagu(a, b):
+    enna b == 0:
+        eluthu("பூஜ்ஜியத்தால் வகுக்க முடியாது!")
+        mudivu ondruumillai
+    mudivu a / b
+
+eluthu("எளிய கணிப்பான்")
+eluthu("1. கூட்டல்")
+eluthu("2. கழித்தல்")
+eluthu("3. பெருக்கல்")
+eluthu("4. வகுத்தல்")
+
+thervu = enn_akku(vaangu("உங்கள் தேர்வை உள்ளிடவும் (1-4): "))
+enn1 = midhaenn_akku(vaangu("முதல் எண்ணை உள்ளிடவும்: "))
+enn2 = midhaenn_akku(vaangu("இரண்டாவது எண்ணை உள்ளிடவும்: "))
+
+enna thervu == 1:
+    eluthu(f"முடிவு: {koottu(enn1, enn2)}")
+illainu thervu == 2:
+    eluthu(f"முடிவு: {kazhi(enn1, enn2)}")
+illainu thervu == 3:
+    eluthu(f"முடிவு: {perukku(enn1, enn2)}")
+illainu thervu == 4:
+    eluthu(f"முடிவு: {vagu(enn1, enn2)}")
+illana:
+    eluthu("தவறான தேர்வு!")
+""",
+
+    "guess_number": """# எண் ஊகிக்கும் விளையாட்டு
+serthu elamai
+
+ragasiya_enn = elamai_enn(1, 100)
+mugayarchi = 0
+kandu_pidikka_villai = unmai
+
+eluthu("1 முதல் 100 வரையிலான எண்ணை ஊகிக்கவும்!")
+
+neram kandu_pidikka_villai:
+    mugayarchi += 1
+    ooham = enn_akku(vaangu("உங்கள் ஊகம்: "))
+    
+    enna ooham < ragasiya_enn:
+        eluthu("அதிகமாக ஊகிக்கவும்!")
+    illainu ooham > ragasiya_enn:
+        eluthu("குறைவாக ஊகிக்கவும்!")
+    illana:
+        kandu_pidikka_villai = poi
+        eluthu(f"வாழ்த்துக்கள்! {mugayarchi} முயற்சிகளில் கண்டுபிடித்துவிட்டீர்கள்!")
+""",
+
+    "file_reader": """# கோப்பு படிப்பான்
+kopu_peyar = vaangu("படிக்க வேண்டிய கோப்பின் பெயரை உள்ளிடவும்: ")
+
+sindhanaiselutham:
+    with kopu_thirappu(kopu_peyar, "r") as kopu:
+        ullaram = kopu.kopu_padippu()
+        eluthu("கோப்பின் உள்ளடக்கம்:")
+        eluthu("-------------------")
+        eluthu(ullaram)
+        eluthu("-------------------")
+        
+        varigal = ullaram.piri("\\n")
+        eluthu(f"மொத்த வரிகள்: {neelamm(varigal)}")
+        
+        sorkal = ullaram.piri()
+        eluthu(f"மொத்த சொற்கள்: {neelamm(sorkal)}")
+thavaruselutham:
+    eluthu(f"பிழை: கோப்பை படிக்க முடியவில்லை '{kopu_peyar}'")
+""",
+
+    "web_scraper": """# வலைத்தள உள்ளடக்க சேகரிப்பு
+serthu valai.request
+serthu saralvadivam
+
+url = vaangu("வலைத்தள முகவரியை உள்ளிடவும்: ")
+
+sindhanaiselutham:
+    eluthu("வலைத்தளத்தை அணுகுகிறது...")
+    with valai_request(url) as response:
+        html = response.read().decode('utf-8')
+        
+        eluthu(f"பெறப்பட்ட தரவின் அளவு: {neelamm(html)} எழுத்துகள்")
+        
+        # தலைப்புகளை பிரித்தெடுக்கும்
+        thalaipu_regex = r"<h[1-6][^>]*>(.*?)</h[1-6]>"
+        thalaipugal = saralvadivam_anaithu(thalaipu_regex, html)
+        
+        eluthu("\nகண்டுபிடிக்கப்பட்ட தலைப்புகள்:")
+        payan i, thalaipu udaya enumerate(thalaipugal):
+            eluthu(f"{i+1}. {thalaipu[0]}")
+            
+        # இணைப்புகளை பிரித்தெடுக்கும்
+        inaippu_regex = r'href=["\'](https?://[^"\'>]+)["\']'
+        inaippugal = saralvadivam_anaithu(inaippu_regex, html)
+        
+        eluthu(f"\nமொத்த இணைப்புகள்: {neelamm(inaippugal)}")
+        eluthu("முதல் 5 இணைப்புகள்:")
+        payan i udaya range(min(5, neelamm(inaippugal))):
+            eluthu(inaippugal[i])
+thavaruselutham Exception vera e:
+    eluthu(f"பிழை: {e}")
+"""
+}
+
+# Function to translate Tanglish code to Python
+def translate_tanglish_to_python(tanglish_code):
+    for tanglish, python in KEYWORDS.items():
+        tanglish_code = re.sub(rf'\b{tanglish}\b', python, tanglish_code)
+    return tanglish_code
+
+# Function to translate Python error messages to Tamil
+def translate_error(error):
+    error_type = type(error).__name__
+    error_msg = str(error)
+    
+    # Translate error type
+    tamil_error_type = ERROR_MESSAGES.get(error_type, error_type)
+    
+    # Try to translate keywords in the error message
+    for py_word, tam_word in PYTHON_TO_TANGLISH.items():
+        error_msg = error_msg.replace(f"'{py_word}'", f"'{tam_word}'")
+    
+    return f"{tamil_error_type}: {error_msg}"
+
+# Function to execute Tanglish code
+def execute_tanglish_code(tanglish_code, debug=False):
+    python_code = translate_tanglish_to_python(tanglish_code)
+    if debug:
+        print("Debug: Translated Python Code:\n", python_code)
+    
+    try:
+        result = eval(python_code, global_namespace)
+        return result
+    except SyntaxError:
+        try:
+            exec(python_code, global_namespace)
+            return None
+        except Exception as e:
+            return translate_error(e)
+    except Exception as e:
+        return translate_error(e)
+
+def debug_tanglish_code(tanglish_code):
+    """Execute Tanglish code in debug mode with step-by-step execution"""
+    lines = tanglish_code.strip().split('\n')
+    python_lines = [translate_tanglish_to_python(line) for line in lines]
+    
+    print("=== Debug Mode ===")
+    print("Press Enter to execute next line, 'q' to quit, 'v' to view variables")
+    
+    local_vars = {}
+    
+    for i, (tanglish_line, python_line) in enumerate(zip(lines, python_lines)):
+        if not tanglish_line.strip():
+            continue
+            
+        print(f"\nLine {i+1}: {tanglish_line}")
+        cmd = input("Command [Enter/q/v]: ").strip().lower()
+        
+        if cmd == 'q':
+            print("Debug session ended.")
+            break
+        elif cmd == 'v':
+            print("Current variables:")
+            for name, value in global_namespace.items():
+                if not name.startswith('__') and name not in globals():
+                    print(f"  {name} = {value}")
+            # Continue with the same line
+            i -= 1
+            continue
+        
+        try:
+            result = execute_tanglish_code(tanglish_line)
+            if result is not None:
+                print(f"Result: {result}")
+        except Exception as e:
+            print(f"Error: {translate_error(e)}")
+            break
+    
+    return "Debug session completed."
+
+# Function to format Tanglish code
+def format_tanglish_code(code):
+    """Format Tanglish code for better readability"""
+    # Basic indentation fixing
+    lines = code.split('\n')
+    formatted_lines = []
+    indent_level = 0
+    
+    for line in lines:
+        stripped = line.strip()
+        
+        # Decrease indent for closing blocks
+        if any(stripped.startswith(word) for word in ["illana:", "illainu:", "mudikirathu:"]):
+            indent_level = max(0, indent_level - 1)
+        
+        # Add proper indentation
+        formatted_lines.append("    " * indent_level + stripped)
+        
+        # Increase indent for opening blocks
+        if any(word in stripped for word in ["enna ", "neram ", "payan ", "varu ", "sirandha ", "sindhanaiselutham:"]):
+            if stripped.endswith(':'):
+                indent_level += 1
+    
+    return '\n'.join(formatted_lines)
+
+# Simple Tamil code editor with syntax highlighting
+def simple_editor():
+    """A simple Tamil code editor using the terminal"""
+    try:
+        import curses
+        
+        def main_editor(stdscr):
+            curses.start_color()
+            curses.init_pair(1, curses.COLOR_GREEN, curses.COLOR_BLACK)  # Keywords
+            curses.init_pair(2, curses.COLOR_CYAN, curses.COLOR_BLACK)   # Strings
+            curses.init_pair(3, curses.COLOR_YELLOW, curses.COLOR_BLACK) # Numbers
+            
+            # Initialize editor state
+            lines = [""]
+            current_line = 0
+            current_col = 0
+            
+            # Main editor loop
+            while True:
+                stdscr.clear()
+                height, width = stdscr.getmaxyx()
+                
+                # Display file content with syntax highlighting
+                for i, line in enumerate(lines):
+                    if i >= height - 1:
+                        break
+                    
+                    # Basic syntax highlighting
+                    j = 0
+                    while j < len(line):
+                        if j >= width - 1:
+                            break
+                            
+                        # Check for keywords
+                        keyword_match = False
+                        for keyword in KEYWORDS:
+                            if line[j:].startswith(keyword) and (j == 0 or not line[j-1].isalnum()):
+                                stdscr.attron(curses.color_pair(1))
+                                stdscr.addstr(i, j, keyword)
+                                stdscr.attroff(curses.color_pair(1))
+                                j += len(keyword)
+                                keyword_match = True
+                                break
+                        
+                        if keyword_match:
+                            continue
+                            
+                        # Check for strings
+                        if line[j:j+1] in ['"', "'"]:
+                            quote = line[j:j+1]
+                            end_quote = line[j+1:].find(quote)
+                            if end_quote != -1:
+                                stdscr.attron(curses.color_pair(2))
+                                stdscr.addstr(i, j, line[j:j+end_quote+2])
+                                stdscr.attroff(curses.color_pair(2))
+                                j += end_quote + 2
+                                continue
+                        
+                        # Check for numbers
+                        if line[j:j+1].isdigit():
+                            num_len = 0
+                            while j + num_len < len(line) and (line[j+num_len].isdigit() or line[j+num_len] == '.'):
+                                num_len += 1
+                            stdscr.attron(curses.color_pair(3))
+                            stdscr.addstr(i, j, line[j:j+num_len])
+                            stdscr.attroff(curses.color_pair(3))
+                            j += num_len
+                            continue
+                        
+                        # Regular character
+                        stdscr.addstr(i, j, line[j])
+                        j += 1
+                
+                # Position cursor
+                stdscr.move(current_line, current_col)
+                
+                # Get user input
+                key = stdscr.getch()
+                
+                # Handle key presses
+                if key == 27:  # ESC key
+                    break
+                elif key == curses.KEY_UP:
+                    current_line = max(0, current_line - 1)
+                    current_col = min(current_col, len(lines[current_line]))
+                elif key == curses.KEY_DOWN:
+                    current_line = min(len(lines) - 1, current_line + 1)
+                    current_col = min(current_col, len(lines[current_line]))
+                elif key == curses.KEY_LEFT:
+                    if current_col > 0:
+                        current_col -= 1
+                    elif current_line > 0:
+                        current_line -= 1
+                        current_col = len(lines[current_line])
+                elif key == curses.KEY_RIGHT:
+                    if current_col < len(lines[current_line]):
+                        current_col += 1
+                    elif current_line < len(lines) - 1:
+                        current_line += 1
+                        current_col = 0
+                elif key == 10:  # Enter key
+                    lines.insert(current_line + 1, lines[current_line][current_col:])
+                    lines[current_line] = lines[current_line][:current_col]
+                    current_line += 1
+                    current_col = 0
+                elif key == 8 or key == 127:  # Backspace
+                    if current_col > 0:
+                        lines[current_line] = lines[current_line][:current_col-1] + lines[current_line][current_col:]
+                        current_col -= 1
+                    elif current_line > 0:
+                        current_col = len(lines[current_line - 1])
+                        lines[current_line - 1] += lines[current_line]
+                        lines.pop(current_line)
+                        current_line -= 1
+                elif key == 9:  # Tab key
+                    lines[current_line] = lines[current_line][:current_col] + "    " + lines[current_line][current_col:]
+                    current_col += 4
+                elif 32 <= key <= 126:  # Printable characters
+                    lines[current_line] = lines[current_line][:current_col] + chr(key) + lines[current_line][current_col:]
+                    current_col += 1
+                
+                # Handle special commands (Ctrl+S to save, Ctrl+R to run)
+                elif key == 19:  # Ctrl+S
+                    filename = "temp_code.tn"
+                    with open(filename, "w") as f:
+                        f.write("\n".join(lines))
+                    stdscr.addstr(height-1, 0, f"Saved to {filename}")
+                    stdscr.refresh()
+                    curses.napms(1000)
+                elif key == 18:  # Ctrl+R
+                    code = "\n".join(lines)
+                    stdscr.clear()
+                    stdscr.addstr(0, 0, "Running code... Press any key to return to editor")
+                    stdscr.refresh()
+                    
+                    # Save current terminal state
+                    curses.endwin()
+                    
+                    # Run the code
+                    print("\n--- Code Output ---")
+                    execute_tanglish_code(code)
+                    print("\n--- End Output ---")
+                    input("Press Enter to return to editor...")
+                    
+                    # Restore terminal state
+                    stdscr.refresh()
+            
+            return "\n".join(lines)
+        
+        code = curses.wrapper(main_editor)
+        return code
+    
+    except ImportError:
+        print("Curses library not available. Simple editor cannot be started.")
+        return None
+
+# Function to load and run examples
+def load_example(example_name):
+    """Load and return a code example"""
+    if example_name in TAMIL_EXAMPLES:
+        return TAMIL_EXAMPLES[example_name]
+    else:
+        return f"Example '{example_name}' not found. Available examples: {', '.join(TAMIL_EXAMPLES.keys())}"
+
+# Help function for standard library
+def show_std_lib_help():
+    print("\n=== தமிழ் நிலையான நூலகம் உதவி (Tamil Standard Library Help) ===")
+    
+    categories = {
+        "நூலக தொகுதிகள் (Library Modules)": [
+            "kanitham (math)", "seyalmurai (os)", "neram (time)", 
+            "saralvadivam (re)", "elamai (random)", "json_tharavagam (json)"
+        ],
+        "கணித செயல்பாடுகள் (Math Functions)": [
+            "kanitham_sin", "kanitham_cos", "kanitham_sqrt", "kanitham_abs"
+        ],
+        "நேர செயல்பாடுகள் (Time Functions)": [
+            "neram_thoongu", "neram_ipothu", "neram_ctime"
+        ],
+        "கோப்பு செயல்பாடுகள் (File Operations)": [
+            "kopu_thirappu", "kopu_padippu", "kopu_ezhuthu", "kopu_moodu"
+        ],
+        "சரம் செயல்பாடுகள் (String Operations)": [
+            "saram_replace", "saram_find", "saram_split", "saram_join"
+        ]
+    }
+    
+    for category, items in categories.items():
+        print(f"\n{category}:")
+        for item in items:
+            python_equiv = TAMIL_STD_LIB.get(item, "")
+            print(f"  {item} -> {python_equiv}")
+    
+    print("\nஎடுத்துக்காட்டுகள் (Examples):")
+    print("  serthu kanitham vera k")
+    print("  eluthu(kanitham_sqrt(16))")
+    print("  neram_thoongu(2)")
+    print("  eluthu(elamai_enn(1, 10))")
+    
+    return ""
+
+# Help function
+def show_help():
+    print("\n=== தமிழ் பைதான் உதவி (Tanglish Python Help) ===")
+    print("\nமுக்கிய சொற்கள் (Key Words):")
+    
+    categories = {
+        "கட்டுப்பாட்டு பாய்வு (Control Flow)": ["enna", "illana", "illainu", "neram", "payan"],
+        "செயல்பாடுகள் (Functions)": ["varu", "mudivu", "sila"],
+        "தரவு வகைகள் (Data Types)": ["saram", "enn", "midhaenn", "ulmai", "pattial", "agarathi", "thoguthy", "urumaru"],
+        "மாற்று செயல்பாடுகள் (Conversion)": ["saram_akku", "enn_akku", "midhaenn_akku", "ulmai_akku", "pattial_akku"],
+        "பொதுவான செயல்பாடுகள் (Common Functions)": ["eluthu", "neelamm", "varisaipadu", "vaagai"]
+    }
+    
+    for category, words in categories.items():
+        print(f"\n{category}:")
+        for word in words:
+            python_equiv = KEYWORDS.get(word, "")
+            print(f"  {word} -> {python_equiv}")
+    
+    print("\nஎடுத்துக்காட்டு (Example):")
+    print("  enna enn_akku(\"5\") > 3:")
+    print("      eluthu(\"பெரியது!\")")
+    print("  illana:")
+    print("      eluthu(\"சிறியது!\")")
+    
+    print("\nநிலையான நூலக உதவிக்கு 'noolaga_udhavi()' ஐப் பயன்படுத்தவும்")
+    print("For standard library help, use 'noolaga_udhavi()'")
+    
+    print("\nமேலும் உதவிக்கு, 'udhavi_thalai(\"topic\")' ஐப் பயன்படுத்தவும்")
+    print("For more help, use 'udhavi_thalai(\"topic\")'")
+    return ""
+
+# Enhanced help function
+def show_enhanced_help():
+    show_help()
+    print("\n=== புதிய அம்சங்கள் (New Features) ===")
+    print("\n1. தரவு காட்சிப்படுத்தல் (Data Visualization):")
+    print("   varaipada, varaipada_kodu, varaipada_patti, varaipada_vattam")
+    
+    print("\n2. தரவு பகுப்பாய்வு (Data Analysis):")
+    print("   tharavu (pandas), enn_aani (numpy)")
+    
+    print("\n3. வலை மேம்பாடு (Web Development):")
+    print("   valai_seyal (Flask)")
+    
+    print("\n4. செயற்கை நுண்ணறிவு (Machine Learning):")
+    print("   arivu (scikit-learn)")
+    
+    print("\n5. தரவுத்தள செயல்பாடுகள் (Database Operations):")
+    print("   tharavu_thalum (SQLite)")
+    
+    print("\n6. காட்சி பயனர் இடைமுகம் (GUI):")
+    print("   kaatchi (Tkinter)")
+    
+    print("\n7. கருவிகள் (Tools):")
+    print("   format_code() - குறியீட்டை வடிவமைக்க")
+    print("   debug_code() - குறியீட்டை பிழைத்திருத்த")
+    print("   editor() - எளிய குறியீடு திருத்தி")
+    print("   example(\"name\") - எடுத்துக்காட்டு குறியீடுகளை பெற")
+    
+    print("\nஎடுத்துக்காட்டுகள் (Examples):")
+    print("  example(\"hello_world\")  - வணக்கம் உலகம்")
+    print("  example(\"calculator\")   - எளிய கணிப்பான்")
+    print("  example(\"guess_number\") - எண் ஊகிக்கும் விளையாட்டு")
+    
+    return ""
+
+# Topic-specific help
+def show_topic_help(topic):
+    topics = {
+        "eluthu": "eluthu() - ஒரு மதிப்பை திரையில் காட்ட\nExample: eluthu(\"வணக்கம் உலகம்\")",
+        "enna": "enna - நிபந்தனை சோதனை\nExample: enna x > 5: eluthu(\"பெரியது\")",
+        "pattial": "pattial - பட்டியல் உருவாக்க\nExample: en_pattial = [1, 2, 3, 4]",
+        "varu": "varu - புதிய செயல்பாட்டை வரையறுக்க\nExample: varu koottu(a, b): mudivu a + b",
+        "kanitham": "kanitham - கணித நூலகம்\nExample: serthu kanitham vera k\neluthu(k.sqrt(16))",
+        "neram_thoongu": "neram_thoongu() - குறிப்பிட்ட நொடிகள் தாமதிக்க\nExample: neram_thoongu(2)"
+    }
+    
+    return topics.get(topic, f"'{topic}' பற்றிய உதவி கிடைக்கவில்லை")
+
+# Function to convert Python file to Tanglish
+def convert_python_to_tanglish(python_file, output_file=None):
+    try:
+        with open(python_file, 'r', encoding='utf-8') as f:
+            python_code = f.read()
+        
+        # Reverse translation
+        tanglish_code = python_code
+        
+        # Sort keywords by length (descending) to avoid partial replacements
+        sorted_keywords = sorted(KEYWORDS.items(), key=lambda x: len(x[1]), reverse=True)
+        
+        for tanglish, python in sorted_keywords:
+            # Use word boundaries to ensure we're replacing whole words
+            tanglish_code = re.sub(rf'\b{python}\b', tanglish, tanglish_code)
+        
+        if output_file:
+            with open(output_file, 'w', encoding='utf-8') as f:
+                f.write(tanglish_code)
+            return f"Successfully converted Python to Tanglish and saved to {output_file}"
+        else:
+            return tanglish_code
+    except Exception as e:
+        return f"Error during conversion: {str(e)}"
+
+# Interactive mode
+def interactive_mode():
+    print("Tanglish Interactive Mode (CTRL+C to exit)")
+    print("உங்கள் தமிழ் பைதான் கோடுகளை இங்கே உள்ளிடவும்")
+    print("Type 'udhavi()' for help")
+    print("Try 'example(\"hello_world\")' to see a sample program")
+    
+    # Add help function to the global namespace
+    global_namespace["udhavi"] = show_enhanced_help
+    global_namespace["udhavi_thalai"] = show_topic_help
+    global_namespace["noolaga_udhavi"] = show_std_lib_help
+    global_namespace["format_code"] = format_tanglish_code
+    global_namespace["debug_code"] = debug_tanglish_code
+    global_namespace["editor"] = simple_editor
+    global_namespace["example"] = load_example
+    
+    while True:
+        try:
+            tanglish_code = input("SOLLU THAMBI>>> ")
+            if tanglish_code.strip():
+                result = execute_tanglish_code(tanglish_code)
+                if result is not None:
+                    print(result)
+        except KeyboardInterrupt:
+            print("\nநன்றி! மீண்டும் சந்திப்போம்! (Thank you! See you again!)")
+            break
+        except Exception as e:
+            print(f"Error: {e}")
+
+# Main function
+def main():
+    if len(sys.argv) == 1:
+        # No arguments, start interactive mode
+        interactive_mode()
+    elif len(sys.argv) == 2:
+        # One argument - run the file
+        file_path = sys.argv[1]
+        with open(file_path, "r", encoding="utf-8") as file:
+            tanglish_code = file.read()
+        execute_tanglish_code(tanglish_code)
+    elif len(sys.argv) == 4 and sys.argv[1] == "--convert":
+        # Convert Python to Tanglish
+        python_file = sys.argv[2]
+        output_file = sys.argv[3]
+        result = convert_python_to_tanglish(python_file, output_file)
+        print(result)
+    elif len(sys.argv) == 3 and sys.argv[1] == "--debug":
+        # Debug mode for a file
+        file_path = sys.argv[2]
+        with open(file_path, "r", encoding="utf-8") as file:
+            tanglish_code = file.read()
+        debug_tanglish_code(tanglish_code)
+    else:
+        print("Usage:")
+        print("  python thanglish.py                   - Interactive mode")
+        print("  python thanglish.py <filename.tn>     - Run Tanglish file")
+        print("  python thanglish.py --convert <python_file> <output_file> - Convert Python to Tanglish")
+        print("  python thanglish.py --debug <filename.tn> - Debug Tanglish file")
+
+if __name__ == "__main__":
+    main()

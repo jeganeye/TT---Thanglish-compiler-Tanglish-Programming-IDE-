@@ -1,0 +1,167 @@
+"""
+Tanglish IDE Backend Server (Fixed & Robust Version)
+Flask + Flask-SocketIO Server supporting real-time terminal streaming and interactive input
+"""
+
+import io
+import sys
+import os
+import queue
+import threading
+from flask import Flask, request, jsonify, render_template
+from flask_socketio import SocketIO, emit
+from flask_cors import CORS
+
+from thanglish import execute_tanglish_code, get_default_namespace
+
+# Thread-local stdout router to safely isolate outputs from concurrent user sessions
+class ThreadLocalStdout:
+    def __init__(self, real_stdout):
+        self.real_stdout = real_stdout
+        self._local = threading.local()
+
+    def set_buffer(self, buf):
+        self._local.buffer = buf
+
+    def clear_buffer(self):
+        self._local.buffer = None
+
+    def write(self, data):
+        buf = getattr(self._local, 'buffer', None)
+        if buf is not None:
+            buf.write(data)
+        else:
+            self.real_stdout.write(data)
+
+    def flush(self):
+        buf = getattr(self._local, 'buffer', None)
+        if buf is not None:
+            buf.flush()
+        else:
+            self.real_stdout.flush()
+
+# Install ThreadLocalStdout once
+thread_local_stdout = ThreadLocalStdout(sys.stdout)
+sys.stdout = thread_local_stdout
+
+app = Flask(__name__, template_folder='templates')
+app.config['SECRET_KEY'] = 'tanglish_secret_key_2025'
+CORS(app, resources={r"/*": {"origins": "*"}})
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
+
+# Per-client resource tracking
+input_queues = {}
+output_buffers = {}
+execution_threads = {}
+
+@app.route('/')
+def index():
+    """Serves the Tanglish Web IDE"""
+    return render_template('index.html')
+
+@app.route('/run', methods=['POST'])
+def run_code_http():
+    """HTTP Fallback execution endpoint"""
+    data = request.get_json(silent=True) or {}
+    code = data.get('code', '')
+    
+    buffer = io.StringIO()
+    thread_local_stdout.set_buffer(buffer)
+    
+    try:
+        # Create isolated namespace with safe HTTP input fallback
+        ns = get_default_namespace()
+        def http_input(prompt=''):
+            return f"[Input not supported in HTTP fallback. Prompt was: {prompt}]"
+        ns['input'] = http_input
+        ns['vaangu'] = http_input
+        
+        result = execute_tanglish_code(code, custom_namespace=ns)
+        if result is not None:
+            print(result)
+    except Exception as e:
+        print(f"Error: {e}")
+    finally:
+        thread_local_stdout.clear_buffer()
+        
+    return jsonify({'output': buffer.getvalue()})
+
+def custom_input(prompt='', sid=None):
+    """Interactive input handler that prompts the web user through WebSockets"""
+    if not sid or sid not in input_queues:
+        return ""
+        
+    # Notify client that input is requested (using modern to=sid parameter)
+    socketio.emit('input_required', {'prompt': prompt}, to=sid)
+    
+    # Wait until client provides input
+    q = input_queues[sid]
+    try:
+        user_val = q.get(timeout=60)  # 60 second safety timeout
+        return user_val
+    except queue.Empty:
+        return ""
+
+@socketio.on('connect')
+def handle_connect():
+    sid = request.sid
+    input_queues[sid] = queue.Queue()
+    output_buffers[sid] = io.StringIO()
+    print(f"[Socket Connected] Client SID: {sid}")
+
+@socketio.on('disconnect')
+def handle_disconnect():
+    sid = request.sid
+    print(f"[Socket Disconnected] Client SID: {sid}")
+    input_queues.pop(sid, None)
+    output_buffers.pop(sid, None)
+    execution_threads.pop(sid, None)
+
+@socketio.on('execute_code')
+def handle_execute_code(data):
+    sid = request.sid
+    code = data.get('code', '')
+    
+    if sid not in input_queues:
+        input_queues[sid] = queue.Queue()
+    if sid not in output_buffers:
+        output_buffers[sid] = io.StringIO()
+    else:
+        # Reset output buffer for fresh execution
+        output_buffers[sid] = io.StringIO()
+
+    def run_worker():
+        thread_local_stdout.set_buffer(output_buffers[sid])
+        try:
+            # Prepare namespace with thread-safe custom input for this specific user session
+            ns = get_default_namespace()
+            ns['input'] = lambda prompt='': custom_input(prompt, sid)
+            ns['vaangu'] = lambda prompt='': custom_input(prompt, sid)
+            
+            result = execute_tanglish_code(code, custom_namespace=ns)
+            if result is not None:
+                print(result)
+        except Exception as e:
+            print(f"Execution Error: {e}")
+        finally:
+            output_text = output_buffers[sid].getvalue()
+            thread_local_stdout.clear_buffer()
+            # Send result to user (using modern to=sid parameter)
+            socketio.emit('execution_completed', {'output': output_text}, to=sid)
+
+    t = threading.Thread(target=run_worker, daemon=True)
+    execution_threads[sid] = t
+    t.start()
+
+@socketio.on('provide_input')
+def handle_provide_input(data):
+    sid = request.sid
+    user_input = data.get('input', '')
+    if sid in input_queues:
+        input_queues[sid].put(user_input)
+
+if __name__ == '__main__':
+    print("==================================================")
+    print("Tanglish IDE Server starting on http://127.0.0.1:5000")
+    print("==================================================")
+    socketio.run(app, host='127.0.0.1', port=5000, debug=False, allow_unsafe_werkzeug=True)

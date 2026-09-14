@@ -1,0 +1,1195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/x-icon" href="https://i.ibb.co/Ftydmrw/thanglish-logo.png">
+    <title>Tanglish Programming IDE</title>
+    
+    <!-- CodeMirror CSS -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/theme/dracula.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/addon/hint/show-hint.min.css">
+    
+    <!-- CodeMirror Core and Required Scripts -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/python/python.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/addon/hint/show-hint.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/addon/hint/anyword-hint.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/addon/edit/closebrackets.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/addon/edit/matchbrackets.min.js"></script>
+    
+    <!-- Socket.IO library for WebSocket support -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.4.1/socket.io.min.js"></script>
+    
+    <style>
+        :root {
+            --primary-color: #6c5ce7;
+            --secondary-color: #a29bfe;
+            --bg-color: #282a36;
+            --text-color: #f8f8f2;
+            --accent-color: #ff79c6;
+            --success-color: #50fa7b;
+            --error-color: #ff5555;
+            --border-radius: 8px;
+        }
+        
+        body {
+            font-family: 'Fira Code', 'Consolas', monospace;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 0;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        header {
+            background-color: var(--primary-color);
+            padding: 1rem;
+            text-align: center;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        
+        h1 {
+            margin: 0;
+            font-size: 2.2rem;
+            color: white;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+        }
+        
+        .subtitle {
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 1rem;
+            margin-top: 0.5rem;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 1.5rem;
+            flex: 1;
+        }
+        
+        .ide-container {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            background-color: #1e1f29;
+            border-radius: var(--border-radius);
+            padding: 1rem;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+        }
+        
+        .editor-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.5rem;
+            background-color: #343746;
+            border-radius: var(--border-radius) var(--border-radius) 0 0;
+        }
+        
+        .editor-title {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .file-icon {
+            color: var(--accent-color);
+        }
+        
+        .editor-actions {
+            display: flex;
+            gap: 0.5rem;
+        }
+        
+        .editor-wrapper {
+            border-radius: 0 0 var(--border-radius) var(--border-radius);
+            overflow: hidden;
+            border: 1px solid #44475a;
+        }
+        
+        .CodeMirror {
+            height: 300px;
+            font-size: 16px;
+            line-height: 1.6;
+        }
+
+        .misspelled-keyword {
+            text-decoration: wavy underline var(--error-color);
+        }
+
+        .CodeMirror-hints {
+            position: absolute;
+            z-index: 10;
+            overflow: hidden;
+            list-style: none;
+            margin: 0;
+            padding: 2px;
+            border-radius: 4px;
+            border: 1px solid #44475a;
+            background: #282a36;
+            font-size: 90%;
+            font-family: 'Fira Code', 'Consolas', monospace;
+            max-height: 20em;
+            overflow-y: auto;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+        }
+
+        .CodeMirror-hint {
+            margin: 0;
+            padding: 4px 8px;
+            border-radius: 2px;
+            white-space: pre;
+            color: var(--text-color);
+            cursor: pointer;
+        }
+
+        li.CodeMirror-hint-active {
+            background: var(--primary-color);
+            color: white;
+        }
+        
+        .input-container {
+            margin-top: 0.5rem;
+        }
+
+        .user-input {
+            width: 100%;
+            padding: 0.5rem;
+            background-color: #282a36;
+            color: var(--text-color);
+            border: 1px solid #44475a;
+            border-radius: var(--border-radius);
+            font-family: 'Fira Code', 'Consolas', monospace;
+        }
+
+        .button-container {
+            display: flex;
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+        
+        button {
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: var(--border-radius);
+            font-family: inherit;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        button:hover {
+            background-color: var(--secondary-color);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+        }
+        
+        button:active {
+            transform: translateY(0);
+        }
+        
+        .run-btn {
+            background-color: var(--success-color);
+            color: #282a36;
+            font-weight: bold;
+        }
+        
+        .clear-btn {
+            background-color: var(--error-color);
+        }
+        
+        .examples-btn {
+            background-color: var(--accent-color);
+        }
+
+        .help-btn {
+            background-color: #8be9fd;
+            color: #282a36;
+            font-weight: bold;
+        }
+
+        .help-panel {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: #343746;
+            padding: 1.5rem;
+            border-radius: var(--border-radius);
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+            z-index: 100;
+            width: 80%;
+            max-width: 1000px;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+
+        .help-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid #44475a;
+        }
+
+        .help-search {
+            margin-bottom: 1rem;
+        }
+
+        .help-search input {
+            width: 100%;
+            padding: 0.5rem;
+            border-radius: var(--border-radius);
+            border: 1px solid #44475a;
+            background-color: #282a36;
+            color: var(--text-color);
+            font-family: inherit;
+        }
+
+        .help-categories {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 1.5rem;
+        }
+
+        .category {
+            background-color: #282a36;
+            border-radius: var(--border-radius);
+            padding: 1rem;
+        }
+
+        .category h4 {
+            color: var(--accent-color);
+            margin-top: 0;
+            margin-bottom: 0.75rem;
+            border-bottom: 1px solid #44475a;
+            padding-bottom: 0.5rem;
+        }
+
+        .keyword-item {
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px dashed #44475a;
+        }
+
+        .keyword-name {
+            color: var(--success-color);
+            font-weight: bold;
+            margin-bottom: 0.25rem;
+            display: block;
+        }
+
+        .keyword-python {
+            color: #6272a4;
+            font-size: 0.9rem;
+            margin-bottom: 0.25rem;
+            display: block;
+        }
+
+        .keyword-description {
+            margin-bottom: 0.5rem;
+        }
+
+        .keyword-example {
+            background-color: #44475a;
+            padding: 0.5rem;
+            border-radius: 4px;
+            font-family: 'Fira Code', 'Consolas', monospace;
+            white-space: pre-wrap;
+            font-size: 0.9rem;
+        }
+
+        .keyword-hidden {
+            display: none;
+        }
+
+        @media (max-width: 768px) {
+            .help-categories {
+                grid-template-columns: 1fr;
+            }
+        
+            .help-panel {
+                width: 95%;
+            }
+        }
+        
+        .output-container {
+            background-color: #1e1f29;
+            border-radius: var(--border-radius);
+            padding: 1rem;
+            margin-top: 1.5rem;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+        }
+        
+        .output-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.5rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid #44475a;
+        }
+        
+        .output-title {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: var(--accent-color);
+            font-weight: bold;
+        }
+        
+        #output {
+            background-color: #282a36;
+            color: var(--text-color);
+            padding: 1rem;
+            border-radius: var(--border-radius);
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            min-height: 150px;
+            font-family: 'Fira Code', 'Consolas', monospace;
+            border: 1px solid #44475a;
+            overflow: auto;
+        }
+        
+        .examples-panel {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: #343746;
+            padding: 1.5rem;
+            border-radius: var(--border-radius);
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+            z-index: 100;
+            max-width: 80%;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+        
+        .examples-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid #44475a;
+        }
+        
+        .close-btn {
+            background: none;
+            border: none;
+            color: var(--text-color);
+            font-size: 1.5rem;
+            cursor: pointer;
+            padding: 0;
+        }
+        
+        .example-item {
+            background-color: #282a36;
+            padding: 1rem;
+            margin-bottom: 1rem;
+            border-radius: var(--border-radius);
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        
+        .example-item:hover {
+            background-color: #44475a;
+        }
+        
+        .example-title {
+            color: var(--accent-color);
+            margin-bottom: 0.5rem;
+        }
+        
+        .example-code {
+            color: var(--text-color);
+            font-family: 'Fira Code', 'Consolas', monospace;
+            white-space: pre-wrap;
+        }
+        
+        .overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 99;
+        }
+        
+        footer {
+            background-color: #1e1f29;
+            text-align: center;
+            padding: 1rem;
+            margin-top: 2rem;
+            font-size: 0.9rem;
+            color: #6272a4;
+        }
+        
+        .keyword {
+            color: var(--accent-color);
+            font-weight: bold;
+        }
+        
+        .string {
+            color: var(--success-color);
+        }
+        
+        .number {
+            color: #bd93f9;
+        }
+        
+        .comment {
+            color: #6272a4;
+            font-style: italic;
+        }
+        
+        .function {
+            color: #8be9fd;
+        }
+        
+        @media (max-width: 768px) {
+            .container {
+                padding: 1rem;
+            }
+            
+            .CodeMirror {
+                height: 250px;
+            }
+        }
+
+        .connection-status {
+            position: fixed;
+            bottom: 10px;
+            right: 10px;
+            padding: 5px 10px;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            z-index: 50;
+        }
+
+        .status-connected {
+            background-color: var(--success-color);
+            color: #282a36;
+        }
+
+        .status-disconnected {
+            background-color: var(--error-color);
+            color: var(--text-color);
+        }
+
+        .status-connecting {
+            background-color: #f1c40f;
+            color: #282a36;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Tanglish Programming IDE</h1>
+        <div class="subtitle">Write Tamil-Python code in a familiar way!</div>
+    </header>
+    
+    <div class="container">
+        <div class="ide-container">
+            <div class="editor-header">
+                <div class="editor-title">
+                    <span class="file-icon">📄</span>
+                    <span>main.tn</span>
+                </div>
+                <div class="editor-actions">
+                    <span>Tanglish Editor</span>
+                </div>
+            </div>
+            <div class="editor-wrapper">
+                <textarea id="codeInput" placeholder="# Write your Tanglish code here
+eluthu('வணக்கம் உலகம்!')
+
+# Define a function
+varu koottu(a, b):
+    mudivu a + b
+
+# Call the function
+result = koottu(5, 10)
+eluthu('கூட்டல் முடிவு:', result)"></textarea>
+            </div>
+            <div class="button-container">
+                <button class="run-btn" onclick="runTanglishCode()">
+                    <span>▶</span> Run Code
+                </button>
+                <button class="clear-btn" onclick="clearOutput()">
+                    <span>🗑️</span> Clear Output
+                </button>
+                <button class="examples-btn" onclick="toggleExamples()">
+                    <span>📚</span> Examples
+                </button>
+                <button class="help-btn" onclick="toggleHelpPanel()">
+                    <span>❓</span> Help
+                </button>
+            </div>
+        </div>
+        
+        <div class="output-container">
+            <div class="output-header">
+                <div class="output-title">
+                    <span>🖥️</span> Output
+                </div>
+                <div>
+                    <span id="execution-time"></span>
+                </div>
+            </div>
+            <pre id="output">// Output will appear here after running your code</pre>
+            <div class="input-container" id="input-container">
+                <input type="text" id="userInput" class="user-input" placeholder="Enter your input here..." onkeydown="handleUserInput(event)" style="display: none;">
+            </div>
+        </div>
+    </div>
+    
+    <div class="overlay" id="overlay"></div>
+    
+    <div class="examples-panel" id="examples-panel">
+        <div class="examples-header">
+            <h3>Tanglish Code Examples</h3>
+            <button class="close-btn" onclick="toggleExamples()">×</button>
+        </div>
+        <div class="example-item" onclick="loadExample(this)">
+            <div class="example-title">Hello World</div>
+            <pre class="example-code">eluthu('வணக்கம் உலகம்!')</pre>
+        </div>
+        <div class="example-item" onclick="loadExample(this)">
+            <div class="example-title">Conditional Statements</div>
+            <pre class="example-code">enn = 15
+
+enna enn > 10:
+    eluthu('எண் 10ஐ விட பெரியது')
+illainu enn == 10:
+    eluthu('எண் 10க்கு சமம்')
+illana:
+    eluthu('எண் 10ஐ விட சிறியது')</pre>
+        </div>
+        <div class="example-item" onclick="loadExample(this)">
+            <div class="example-title">Loops</div>
+            <pre class="example-code"># For loop
+eluthu('For Loop:')
+payan i udaya range(5):
+    eluthu(i)
+
+# While loop
+eluthu('\nWhile Loop:')
+count = 0
+neram count < 5:
+    eluthu(count)
+    count = count + 1</pre>
+        </div>
+        <div class="example-item" onclick="loadExample(this)">
+            <div class="example-title">Functions</div>
+            <pre class="example-code">varu vanakkam(peyar):
+    mudivu f'வணக்கம் {peyar}!'
+
+message = vanakkam('தமிழ்')
+eluthu(message)
+
+# Function with multiple parameters
+varu koottu(a, b):
+    mudivu a + b
+
+eluthu('5 + 10 =', koottu(5, 10))</pre>
+        </div>
+        <div class="example-item" onclick="loadExample(this)">
+            <div class="example-title">Data Structures</div>
+            <pre class="example-code"># List (pattial)
+fruits = ['ஆப்பிள்', 'ஆரஞ்சு', 'வாழைப்பழம்']
+eluthu('பழங்கள்:', fruits)
+fruits.serkkavum('திராட்சை')
+eluthu('புதிய பழம் சேர்த்த பின்:', fruits)
+
+# Dictionary (agarathi)
+person = {
+    'peyar': 'ராஜா',
+    'vayathu': 30,
+    'oor': 'சென்னை'
+}
+eluthu('நபர்:', person)
+eluthu('பெயர்:', person['peyar'])</pre>
+        </div>
+        <div class="example-item" onclick="loadExample(this)">
+            <div class="example-title">User Input</div>
+            <pre class="example-code"># Get user input
+name = vaangu('Enter your name: ')
+eluthu('வணக்கம்', name, '!')
+
+# Calculate age
+birth_year = enn(vaangu('Enter your birth year: '))
+current_year = 2025
+age = current_year - birth_year
+eluthu('Your age is:', age)</pre>
+        </div>
+    </div>
+    
+    <div class="overlay" id="help-overlay"></div>
+
+    <div class="help-panel" id="help-panel">
+        <div class="help-header">
+            <h3>Tanglish Keywords Reference</h3>
+            <button class="close-btn" onclick="toggleHelpPanel()">×</button>
+        </div>
+        <div class="help-content">
+            <div class="help-search">
+                <input type="text" id="keyword-search" placeholder="Search keywords..." onkeyup="filterKeywords()">
+            </div>
+            <div class="help-categories">
+                <div class="category">
+                    <h4>Control Flow</h4>
+                    <div class="keyword-list" id="control-flow-keywords">
+                    <!-- Keywords will be populated by JavaScript -->
+                    </div>
+                </div>
+                <div class="category">
+                    <h4>Functions & Variables</h4>
+                    <div class="keyword-list" id="function-keywords">
+                    <!-- Keywords will be populated by JavaScript -->
+                    </div>
+                </div>
+                <div class="category">
+                    <h4>Data Types</h4>
+                    <div class="keyword-list" id="datatype-keywords">
+                    <!-- Keywords will be populated by JavaScript -->
+                    </div>
+                </div>
+                <div class="category">
+                    <h4>Input/Output</h4>
+                    <div class="keyword-list" id="io-keywords">
+                    <!-- Keywords will be populated by JavaScript -->
+                    </div>
+                </div>
+                <div class="category">
+                    <h4>Standard Library</h4>
+                    <div class="keyword-list" id="stdlib-keywords">
+                    <!-- Keywords will be populated by JavaScript -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="connection-status" class="connection-status status-connecting">
+        Connecting...
+    </div>
+
+    <footer>
+        Tanglish Programming Language IDE &copy; 2025 | A Tamil-Python Programming Experience Created By NIDARSHAN V & TEAM | SRKV PTC COIMBATORE
+    </footer>
+    
+    <script>
+        // Initialize Socket.IO connection
+        const socket = io('http://localhost:5000');
+        
+        // Socket.IO event handlers
+        socket.on('connect', () => {
+            console.log('Connected to server');
+            document.getElementById('connection-status').className = 'connection-status status-connected';
+            document.getElementById('connection-status').textContent = 'Connected';
+            
+            // Hide the status after 3 seconds
+            setTimeout(() => {
+                document.getElementById('connection-status').style.display = 'none';
+            }, 3000);
+        });
+        
+        socket.on('disconnect', () => {
+            console.log('Disconnected from server');
+            document.getElementById('connection-status').className = 'connection-status status-disconnected';
+            document.getElementById('connection-status').textContent = 'Disconnected';
+            document.getElementById('connection-status').style.display = 'block';
+        });
+        
+        socket.on('input_required', (data) => {
+            waitForUserInput(data.prompt);
+        });
+        
+        socket.on('execution_completed', (data) => {
+            document.getElementById('output').textContent = data.output || "No output";
+            document.getElementById('execution-time').textContent = `Execution completed`;
+            
+            // Hide the input field if it's visible
+            document.getElementById('userInput').style.display = 'none';
+            waitingForInput = false;
+        });
+        // Add this right after initializing the socket
+        let socketConnected = false;
+        let connectionTimeout = setTimeout(() => {
+            if (!socketConnected) {
+                document.getElementById('connection-status').className = 'connection-status status-disconnected';
+                document.getElementById('connection-status').textContent = 'Using HTTP fallback';
+        
+                // Override the runTanglishCode function to use HTTP
+                window.runTanglishCode = function() {
+                const code = editor.getValue();
+                const startTime = performance.now();
+            
+                document.getElementById('output').textContent = "Running code...";
+            
+                fetch('http://127.0.0.1:5000/run', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ code })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    const endTime = performance.now();
+                    const executionTime = ((endTime - startTime) / 1000).toFixed(3);
+                
+                    document.getElementById('output').textContent = data.output || "No output";
+                    document.getElementById('execution-time').textContent = `Execution time: ${executionTime}s`;
+                })
+                .catch(error => {
+                    document.getElementById('output').textContent = "Error connecting to the server.";
+                    console.error('Error:', error);
+                });
+            };
+        }
+    }, 5000);
+
+    socket.on('connect', () => {
+        socketConnected = true;
+        clearTimeout(connectionTimeout);
+        console.log('Connected to server');
+        document.getElementById('connection-status').className = 'connection-status status-connected';
+        document.getElementById('connection-status').textContent = 'Connected';
+    
+        // Hide the status after 3 seconds
+        setTimeout(() => {
+            document.getElementById('connection-status').style.display = 'none';
+        }, 3000);
+    });
+
+        // Initialize CodeMirror with autocompletion
+        const editor = CodeMirror.fromTextArea(document.getElementById("codeInput"), {
+            mode: "python",
+            theme: "dracula",
+            lineNumbers: true,
+            autoCloseBrackets: true,
+            matchBrackets: true,
+            indentUnit: 4,
+            tabSize: 4,
+            indentWithTabs: false,
+            lineWrapping: true,
+            extraKeys: {
+                "Tab": function(cm) {
+                    cm.replaceSelection("    ", "end");
+                },
+                "Ctrl-Space": "autocomplete"
+            },
+            hintOptions: {
+                completeSingle: false
+            }
+        });
+        
+        // Custom syntax highlighting for Tanglish keywords
+        const tanglishKeywords = [
+            "eluthu", "enna", "illana", "varu", "mudivu", "neram", "payan", 
+            "thodar", "niruthu", "serthu", "mugavari", "vera", "sirandha", 
+            "self", "veruppu", "sollu", "sindhanaiselutham", "thavaruselutham", 
+            "mudikirathu", "maippu", "illainu", "sila", "unmai", "poi", 
+            "ondruumillai", "ezhuthapadum", "akkam", "idam", "thodarbu", 
+            "vilakku", "athuvaaga", "allathu", "maari", "udaya", "saram", 
+            "enn", "midhaenn", "ulmai", "pattial", "agarathi", "thoguthy", 
+            "urumaru", "onrum_illai", "saram_akku", "enn_akku", "midhaenn_akku", 
+            "ulmai_akku", "pattial_akku", "agarathi_akku", "thoguthy_akku", 
+            "urumaru_akku", "idaipadu", "piri", "maatru", "serkkavum", "neekku", 
+            "seruhu", "saavigal", "mathippugal", "inaikal", "neelamm", 
+            "varisaipadu", "vaagai", "madippu", "vaangu"
+        ];
+
+        // Register custom hint helper for Tanglish keywords
+        CodeMirror.registerHelper("hint", "python", function(editor) {
+            const cursor = editor.getCursor();
+            const line = editor.getLine(cursor.line);
+            const start = cursor.ch;
+            let end = cursor.ch;
+    
+            // Find the start of the current word
+            while (end > 0 && /[\w_]/.test(line.charAt(end - 1))) --end;
+            const word = line.slice(end, start).toLowerCase();
+    
+            // Filter keywords that match the current word
+            const matches = tanglishKeywords.filter(function(item) {
+                return item.toLowerCase().indexOf(word) === 0;
+            });
+    
+            // If there are matches, show the hint
+            if (matches.length) {
+                return {
+                    list: matches,
+                    from: CodeMirror.Pos(cursor.line, end),
+                    to: CodeMirror.Pos(cursor.line, start)
+                };
+            }
+        });
+
+        // Auto-trigger hints while typing
+        editor.on("inputRead", function(cm, change) {
+            if (change.origin !== "setValue") {
+                const cursor = cm.getCursor();
+                const token = cm.getTokenAt(cursor);
+        
+                if (token.type !== "comment" && token.string.length > 1) {
+                    CodeMirror.commands.autocomplete(cm, null, {completeSingle: false});
+                }
+            }
+        });
+
+        // Spell checking
+        editor.on("change", function(cm, change) {
+            if (change.text[0] === " " || change.text[0] === "\n") {
+                checkSpelling(cm);
+            }
+        });
+
+        function checkSpelling(cm) {
+            cm.getAllMarks().forEach(mark => mark.clear());
+    
+            const lineCount = cm.lineCount();
+            for (let i = 0; i < lineCount; i++) {
+                const line = cm.getLine(i);
+                const words = line.split(/[\s\(\)\[\]\{\}\.\,\:\;]/);
+        
+                words.forEach(word => {
+                    if (!word || /^\d+$/.test(word)) return;
+            
+                    if (isPotentialKeyword(word) && !isValidKeyword(word)) {
+                        const start = line.indexOf(word);
+                        if (start !== -1) {
+                            cm.markText(
+                                {line: i, ch: start},
+                                {line: i, ch: start + word.length},
+                                {className: "misspelled-keyword", title: "Possible misspelled keyword"}
+                            );
+                        }
+                    }
+                });
+            }
+        }
+
+        function isPotentialKeyword(word) {
+            return word.length > 3 && 
+                !word.startsWith('"') && 
+                !word.startsWith("'") && 
+                !word.includes("=");
+        }
+
+                function isValidKeyword(word) {
+            return tanglishKeywords.includes(word);
+        }
+        
+        // Global variable to track if we're waiting for input
+        let waitingForInput = false;
+        
+        // Function to handle user input
+        function handleUserInput(event) {
+            if (waitingForInput && event.key === 'Enter') {
+                const inputValue = event.target.value;
+                event.target.value = '';
+                
+                // Display the input in the output area
+                const outputElement = document.getElementById('output');
+                outputElement.innerHTML += inputValue + '\n';
+                
+                // Send the input to the server via WebSocket
+                socket.emit('provide_input', { input: inputValue });
+                
+                // Hide the input field
+                event.target.style.display = 'none';
+                waitingForInput = false;
+            }
+        }
+        
+        // Modified runTanglishCode function to use WebSockets
+        function runTanglishCode() {
+            const code = editor.getValue();
+            const startTime = performance.now();
+            
+            document.getElementById('output').textContent = "Running code...";
+            document.getElementById('execution-time').textContent = "";
+            
+            // Send the code to the server via WebSocket
+            socket.emit('execute_code', { code });
+        }
+        
+        // Function to display input prompt and wait for user input
+        function waitForUserInput(prompt) {
+            const outputElement = document.getElementById('output');
+            const inputElement = document.getElementById('userInput');
+            
+            // Display the prompt
+            outputElement.innerHTML += prompt;
+            
+            // Show the input field
+            inputElement.style.display = 'block';
+            inputElement.focus();
+            
+            // Set the waiting flag
+            waitingForInput = true;
+        }
+        
+        // Clear output
+        function clearOutput() {
+            document.getElementById('output').textContent = "// Output will appear here after running your code";
+            document.getElementById('execution-time').textContent = "";
+        }
+        
+        // Toggle examples panel
+        function toggleExamples() {
+            const panel = document.getElementById('examples-panel');
+            const overlay = document.getElementById('overlay');
+            
+            if (panel.style.display === 'block') {
+                panel.style.display = 'none';
+                overlay.style.display = 'none';
+            } else {
+                panel.style.display = 'block';
+                overlay.style.display = 'block';
+            }
+        }
+        
+        // Load example code
+        function loadExample(element) {
+            const code = element.querySelector('.example-code').textContent;
+            editor.setValue(code);
+            toggleExamples();
+        }
+        
+        // Keyword definitions with examples
+        const keywordDefinitions = {
+            // Control Flow
+            "enna": {
+                python: "if",
+                category: "control-flow",
+                description: "Conditional statement",
+                example: "enna x > 10:\n    eluthu('x is greater than 10')"
+            },
+            "illana": {
+                python: "else",
+                category: "control-flow",
+                description: "Alternative conditional branch",
+                example: "enna x > 10:\n    eluthu('x is greater than 10')\nillana:\n    eluthu('x is not greater than 10')"
+            },
+            "illainu": {
+                python: "elif",
+                category: "control-flow",
+                description: "Alternative conditional branch with condition",
+                example: "enna x > 10:\n    eluthu('x is greater than 10')\nillainu x == 10:\n    eluthu('x is equal to 10')\nillana:\n    eluthu('x is less than 10')"
+            },
+            "neram": {
+                python: "while",
+                category: "control-flow",
+                description: "Loop while a condition is true",
+                example: "count = 0\nneram count < 5:\n    eluthu(count)\n    count = count + 1"
+            },
+            "payan": {
+                python: "for",
+                category: "control-flow",
+                description: "Loop over a sequence",
+                example: "payan i udaya range(5):\n    eluthu(i)"
+            },
+            "thodar": {
+                python: "continue",
+                category: "control-flow",
+                description: "Skip to the next iteration of a loop",
+                example: "payan i udaya range(10):\n    enna i % 2 == 0:\n        thodar\n    eluthu(i)  # Only prints odd numbers"
+            },
+            "niruthu": {
+                python: "break",
+                category: "control-flow",
+                description: "Exit from a loop",
+                example: "payan i udaya range(10):\n    enna i > 5:\n        niruthu\n    eluthu(i)  # Prints 0 through 5"
+            },
+    
+            // Functions & Variables
+            "varu": {
+                python: "def",
+                category: "function",
+                description: "Define a function",
+                example: "varu vanakkam(peyar):\n    mudivu f'வணக்கம் {peyar}!'\n\nmessage = vanakkam('தமிழ்')\neluthu(message)"
+            },
+            "mudivu": {
+                python: "return",
+                category: "function",
+                description: "Return a value from a function",
+                example: "varu koottu(a, b):\n    mudivu a + b\n\nresult = koottu(5, 10)\neluthu(result)  # Prints 15"
+            },
+            "sila": {
+                python: "lambda",
+                category: "function",
+                description: "Create an anonymous function",
+                example: "square = sila x: x * x\neluthu(square(5))  # Prints 25"
+            },
+    
+            // Data Types
+            "saram": {
+                python: "str",
+                category: "datatype",
+                description: "String data type",
+                example: "peyar = saram('தமிழ்')\neluthu(peyar)"
+            },
+            "enn": {
+                python: "int",
+                category: "datatype",
+                description: "Integer data type",
+                example: "vayathu = enn(25)\neluthu(vayathu)"
+            },
+            "midhaenn": {
+                python: "float",
+                category: "datatype",
+                description: "Floating-point data type",
+                example: "height = midhaenn(1.75)\neluthu(height)"
+            },
+            "pattial": {
+                python: "list",
+                category: "datatype",
+                description: "List data type",
+                example: "fruits = pattial(['ஆப்பிள்', 'ஆரஞ்சு', 'வாழைப்பழம்'])\neluthu(fruits)"
+            },
+            "agarathi": {
+                python: "dict",
+                category: "datatype",
+                description: "Dictionary data type",
+                example: "person = agarathi({\n    'peyar': 'ராஜா',\n    'vayathu': 30,\n    'oor': 'சென்னை'\n})\neluthu(person['peyar'])"
+            },
+    
+            // Input/Output
+            "eluthu": {
+                python: "print",
+                category: "io",
+                description: "Print values to the console",
+                example: "eluthu('வணக்கம் உலகம்!')"
+            },
+            "vaangu": {
+                python: "input",
+                category: "io",
+                description: "Get user input from the console",
+                example: "name = vaangu('Enter your name: ')\neluthu('வணக்கம்', name, '!')"
+            },
+    
+            // Standard Library
+            "kanitham": {
+                python: "math",
+                category: "stdlib",
+                description: "Math module",
+                example: "serthu kanitham\neluthu(kanitham.sqrt(16))  # Prints 4.0"
+            },
+            "neram_thoongu": {
+                python: "time.sleep",
+                category: "stdlib",
+                description: "Pause execution for a specified number of seconds",
+                example: "serthu neram\nneram_thoongu(2)  # Pauses for 2 seconds"
+            }
+        };
+
+        // Function to toggle help panel
+        function toggleHelpPanel() {
+            const panel = document.getElementById('help-panel');
+            const overlay = document.getElementById('help-overlay');
+    
+            if (panel.style.display === 'block') {
+                panel.style.display = 'none';
+                overlay.style.display = 'none';
+            } else {
+                panel.style.display = 'block';
+                overlay.style.display = 'block';
+                populateKeywords();
+            }
+        }
+
+        // Function to populate keywords in the help panel
+        function populateKeywords() {
+            // Clear existing content
+            document.getElementById('control-flow-keywords').innerHTML = '';
+            document.getElementById('function-keywords').innerHTML = '';
+            document.getElementById('datatype-keywords').innerHTML = '';
+            document.getElementById('io-keywords').innerHTML = '';
+            document.getElementById('stdlib-keywords').innerHTML = '';
+    
+            // Populate keywords by category
+            for (const [keyword, details] of Object.entries(keywordDefinitions)) {
+                const keywordElement = document.createElement('div');
+                keywordElement.className = 'keyword-item';
+                keywordElement.innerHTML = `
+                    <span class="keyword-name">${keyword}</span>
+                    <span class="keyword-python">Python: ${details.python}</span>
+                    <div class="keyword-description">${details.description}</div>
+                    <pre class="keyword-example">${details.example}</pre>
+                `;
+        
+                // Add to appropriate category
+                const categoryId = `${details.category}-keywords`;
+                document.getElementById(categoryId).appendChild(keywordElement);
+            }
+        }
+
+        // Function to filter keywords based on search
+        function filterKeywords() {
+            const searchText = document.getElementById('keyword-search').value.toLowerCase();
+            const keywordItems = document.querySelectorAll('.keyword-item');
+    
+            keywordItems.forEach(item => {
+                const keywordName = item.querySelector('.keyword-name').textContent.toLowerCase();
+                const keywordPython = item.querySelector('.keyword-python').textContent.toLowerCase();
+                const keywordDesc = item.querySelector('.keyword-description').textContent.toLowerCase();
+        
+                if (keywordName.includes(searchText) || 
+                   keywordPython.includes(searchText) || 
+                   keywordDesc.includes(searchText)) {
+                   item.classList.remove('keyword-hidden');
+                } else {
+                    item.classList.add('keyword-hidden');
+                }
+            });
+        }
+
+        // Add event listener for help panel overlay
+        document.getElementById('help-overlay').addEventListener('click', toggleHelpPanel);
+
+        // Add event listener for examples panel overlay
+        document.getElementById('overlay').addEventListener('click', toggleExamples);
+
+        // Add event listener for Escape key to close panels
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                if (document.getElementById('help-panel').style.display === 'block') {
+                    toggleHelpPanel();
+                }
+                if (document.getElementById('examples-panel').style.display === 'block') {
+                    toggleExamples();
+                }
+            }
+        });
+        
+        // Handle keyboard shortcuts
+        document.addEventListener('keydown', function(e) {
+            // Ctrl+Enter or Cmd+Enter to run code
+            if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+                e.preventDefault();
+                runTanglishCode();
+            }
+        });
+    </script>
+</body>
+</html>
+
+        
